@@ -1,70 +1,73 @@
 """라즈베리파이에서 한글 폰트가 왜 안 보이는지 진단한다.
 
-사용법 (라즈베리파이 데스크톱 터미널에서):
+사용법 (라즈베리파이 '데스크톱 화면'의 터미널에서):
     python3 check_font.py
 """
 import subprocess
-import sys
 import tkinter as tk
 from tkinter import font as tkfont
 
-from standup_ui.config import FONT_STACK, KOREAN_FONT_HINTS, FALLBACK_FONTS
 from standup_ui.application import App
 
-TEST = "설정 준비됨 레이저 한글"
+TEST = "설정 준비됨 레이저"
 
 
-def sh(cmd):
+def sh(*cmd):
     try:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
-    except Exception as e:  # noqa: BLE001
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError) as e:
         return f"(실행 실패: {e})"
 
 
-print("=" * 60)
-print("1) 시스템에 설치된 한글 폰트 (fc-list :lang=ko)")
-ko = sh("fc-list :lang=ko family")
-print(ko if ko else "  >>> 없음! 한글 폰트가 설치되어 있지 않습니다.")
+print("=" * 64)
+print("1) 시스템에 한글 폰트가 설치되어 있는가?  (fc-list :lang=ko)")
+ko = sh("fc-list", ":lang=ko", "family")
+if ko:
+    for line in sorted(set(ko.splitlines()))[:15]:
+        print("   ", line)
+    print(f"    -> 한글 폰트 {len(set(ko.splitlines()))}종 설치됨. OK")
+else:
+    print("    >>> 없음! 한글 폰트가 설치되어 있지 않습니다. 이것이 원인입니다.")
+    print("    >>> sudo apt install fonts-noto-cjk  후  fc-cache -fv")
 
-print("=" * 60)
-print("2) Tk가 인식하는 폰트 패밀리 중 한글로 보이는 것")
+print("=" * 64)
+print("2) fontconfig가 추천하는 한글 폰트  (fc-match :lang=ko)")
+print("   ", sh("fc-match", "-f", "%{family}", ":lang=ko") or "(없음)")
+
 root = tk.Tk()
 root.withdraw()
-fams = sorted(tkfont.families())
-hits = [f for f in fams if any(h in f.lower() for h in KOREAN_FONT_HINTS)]
-print("  " + (", ".join(hits) if hits else ">>> 없음"))
-print(f"  (Tk가 보는 전체 패밀리 개수: {len(fams)})")
 
-print("=" * 60)
-print("3) 앱이 실제로 고르는 폰트")
-picked = App._pick_family(None)
-print(f"  >>> _pick_family() = {picked!r}")
-print(f"  FONT_STACK     = {FONT_STACK}")
-print(f"  FALLBACK_FONTS = {FALLBACK_FONTS}")
+print("=" * 64)
+print("3) 앱이 최종적으로 고르는 폰트")
+picked = App._pick_family()
+print(f"    >>> _pick_family() = {picked!r}")
 
-print("=" * 60)
-print("4) 그 폰트로 한글을 실제로 그릴 수 있는지 (폭 측정)")
-f = tkfont.Font(family=picked, size=16)
-w_ko = f.measure(TEST)
-w_en = f.measure("ABCD" * 3)
-print(f"  '{TEST}' 폭 = {w_ko}px")
-print(f"  영문 12자     폭 = {w_en}px")
-if w_ko == 0:
-    print("  >>> 폭이 0. 글리프가 없어 아무것도 안 그려집니다.")
+print("=" * 64)
+print("4) 그 폰트가 한글을 실제로 그리는가?  (글리프 유무 판정)")
 
-print("=" * 60)
-print("5) 창을 띄웁니다. 아래 3줄이 보이는지 눈으로 확인하세요. (닫으려면 창 X)")
+
+def renders_hangul(family):
+    """한글 글리프가 없으면 Tk는 모든 문자를 같은 폭의 □로 그린다.
+    서로 폭이 크게 다른 한글 두 글자의 폭이 같으면 글리프가 없다는 뜻."""
+    f = tkfont.Font(family=family, size=20)
+    w_ko = f.measure("한")
+    w_box = f.measure("鿿")  # 폰트에 거의 없는 CJK 문자 = 확실한 두부(□) 폭
+    return w_ko > 0 and w_ko != w_box
+
+
+for family in (picked, "Noto Sans CJK KR", "NanumGothic"):
+    ok = renders_hangul(family)
+    print(f"    {family:22s} : {'한글 렌더 가능 OK' if ok else '>>> 한글 글리프 없음 (□)'}")
+
+print("=" * 64)
+print("5) 창을 띄웁니다. 한글이 보이는 줄이 있으면 그 폰트 이름을 알려주세요.")
 root.deiconify()
 root.title("font check")
-root.geometry("640x260")
+root.geometry("680x300")
 root.configure(bg="#0d141c")
-for label, family in ((f"picked: {picked}", picked),
-                      ("Noto Sans CJK KR", "Noto Sans CJK KR"),
-                      ("NanumGothic", "NanumGothic")):
-    tk.Label(root, text=f"[{label}]  {TEST}",
+for family in (picked, "Noto Sans CJK KR", "NanumGothic", "DejaVu Sans"):
+    tk.Label(root, text=f"[{family}]  {TEST}",
              font=tkfont.Font(family=family, size=18),
-             bg="#0d141c", fg="#e8eef4").pack(anchor="w", padx=16, pady=10)
-tk.Label(root, text="한글이 보이는 줄이 있으면 그 폰트 이름을 알려주세요.",
-         font=tkfont.Font(family=picked, size=11),
-         bg="#0d141c", fg="#8ea0b2").pack(anchor="w", padx=16, pady=10)
+             bg="#0d141c", fg="#e8eef4").pack(anchor="w", padx=16, pady=8)
 root.mainloop()

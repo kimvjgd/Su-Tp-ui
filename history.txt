@@ -87,3 +87,28 @@ A: 원인은 파일 인코딩이 아니라(모든 .py는 정상 UTF-8) 라즈베
    - application.py: _pick_family()가 FONT_STACK -> 키워드 자동탐색 -> 폴백(+경고 출력) 순으로 동작
    tkinter font.families()를 스텁으로 대체해 5개 시나리오(noto-cjk/nanum/타 한글폰트/폰트없음/윈도우)
    모두 올바른 폰트를 고르는 것 확인.
+
+[2026-07-14 12:14:35]
+Q: 이제는 네모로 깨지지 않고 아예 안 보여 -> (진단 결과 폰트가 'URW Gothic'으로 잡힘, 결과창 한글 전부 네모)
+A: 내가 직전에 넣은 KOREAN_FONT_HINTS의 "gothic" 키워드가 한글이 없는 라틴 폰트
+   'URW Gothic'을 이름만 보고 잡아버린 버그였음. 두 가지를 고침.
+   - config.py: KOREAN_FONT_HINTS에서 범용 "gothic" 제거 (URW/Century Gothic 오탐 방지),
+     한글 폰트에만 쓰이는 조각(cjk/nanum/gulim/batang/dotum/myeongjo/malgun 등)만 남김
+   - application.py: _pick_family()를 staticmethod로 바꾸고, 이름 추측 대신
+     _ask_fontconfig_for_korean()으로 fc-list :lang=ko (설치 확인) + fc-match :lang=ko
+     (실제 한글 렌더 가능 폰트명)를 물어보게 함. 순서: FONT_STACK -> fontconfig -> 힌트 -> 폴백+경고
+   - check_font.py: 진단 스크립트 추가/강화. 글리프 유무를 폭 측정으로 판정.
+   스텁 테스트 5종으로 URW Gothic이 더 이상 선택되지 않음을 확인.
+   ※ 남은 근본 원인: 결과창에서 Noto/Nanum을 직접 지정한 줄까지 네모였으므로
+     파이에 한글 폰트가 실제로 설치되지 않은 상태. sudo apt install fonts-noto-cjk 필요.
+
+[2026-07-14 12:41:02]
+Q: 한글 해결됨. main.py를 1024x600 7인치 디스플레이에 꽉 찬 전체화면으로 띄우고,
+   우측 상단 최소화/전체화면/닫기 같은 OS 기본 창 버튼(제목표시줄)을 없애고 싶다
+A: - config.py: SCREEN_W/H 800x480 -> 1024x600, FULLSCREEN = True 추가
+   - application.py: App(fullscreen=FULLSCREEN)로 받아 attributes("-fullscreen", ...) 적용.
+     전체화면이면 제목표시줄/창버튼이 함께 사라짐. F11 토글, Escape 해제, Exit 버튼으로 종료.
+   - main.py: argparse 추가. 개발 PC용 `python main.py --windowed` 창 모드 옵션.
+   레이아웃은 pack/grid weight 기반이라 해상도만 바꿔도 늘어남(그래프는 <Configure>에서 재렌더).
+   Windows python + PIL ImageGrab으로 1024x600 실제 렌더링 확인: 메인/설정 화면 모두 정상,
+   잘림 없음, 한글("준비됨","환경 설정") 정상 표시.
