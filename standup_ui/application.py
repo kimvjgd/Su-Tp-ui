@@ -1,7 +1,9 @@
+import sys
 import tkinter as tk
 from tkinter import font as tkfont
 
-from .config import SCREEN_W, SCREEN_H, APP_TITLE, DEFAULT_THEME, FONT_STACK
+from .config import (SCREEN_W, SCREEN_H, APP_TITLE, DEFAULT_THEME, FONT_STACK,
+                     KOREAN_FONT_HINTS, FALLBACK_FONTS)
 from .theme import THEMES
 from .screens.main_screen import MainScreen
 from .screens.settings_screen import SettingsScreen
@@ -49,7 +51,18 @@ class App(tk.Tk):
 
     def _pick_family(self):
         available = {f.lower(): f for f in tkfont.families()}
+
         for name in FONT_STACK:
+            if name.lower() in available:
+                return available[name.lower()]
+
+        for low, family in sorted(available.items()):
+            if any(hint in low for hint in KOREAN_FONT_HINTS):
+                return family
+
+        print("[warn] 한글 폰트를 찾지 못했습니다. 한글이 네모(□)로 보입니다.\n"
+              "       설치: sudo apt install fonts-noto-cjk", file=sys.stderr)
+        for name in FALLBACK_FONTS:
             if name.lower() in available:
                 return available[name.lower()]
         return "TkDefaultFont"
