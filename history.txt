@@ -75,3 +75,15 @@ A: main_screen.py 버튼 높이 축소 (Home/Start 42->38px, Save/Output 40->36p
 [2026-07-14 11:28:43]
 Q: git ignore 파일을 만들어주고 .claude 파일을 넣어줘
 A: .gitignore를 새로 생성하고 .claude/ 를 최상단에 추가함. 함께 Python 캐시/가상환경/에디터/OS 관련 항목도 포함.
+
+[2026-07-14 11:52:07]
+Q: 해당 파일을 raspberry pi 에 가서 여니 한글이 다 깨져 어떻게 고쳐야해? (앱 GUI 화면에서 깨짐)
+A: 원인은 파일 인코딩이 아니라(모든 .py는 정상 UTF-8) 라즈베리파이에 한글 폰트가 없어서였음.
+   추가로 config.py의 FONT_STACK이 "Noto Sans KR"만 갖고 있어, Debian에서 fonts-noto-cjk를
+   설치해도 실제 패밀리명 "Noto Sans CJK KR"과 이름이 안 맞아 DejaVu Sans로 폴백되는 버그가 있었음.
+   - 라즈베리파이에서: sudo apt install fonts-noto-cjk (경량 대안: fonts-nanum) 후 앱 재실행
+   - config.py: FONT_STACK을 한글 글리프 보유 폰트만으로 정리(Noto Sans CJK KR/NanumGothic 등 추가),
+     KOREAN_FONT_HINTS(키워드 자동탐색), FALLBACK_FONTS(최후 폴백) 분리 추가
+   - application.py: _pick_family()가 FONT_STACK -> 키워드 자동탐색 -> 폴백(+경고 출력) 순으로 동작
+   tkinter font.families()를 스텁으로 대체해 5개 시나리오(noto-cjk/nanum/타 한글폰트/폰트없음/윈도우)
+   모두 올바른 폰트를 고르는 것 확인.
